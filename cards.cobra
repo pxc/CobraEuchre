@@ -1,22 +1,21 @@
 ﻿"""
-This is some Cobra code representing a typical pack of playing cards.
+This is some Cobra code for the game of Euchre with British rules.
+
+By Matthew Strawbridge, October 2010
+The code in this file is public domain.
+My git repository is at http://github.com/pxc/CobraEuchre
+If you fork and improve it, please send me a pull request.
 """
 
-# For Winforms
-# Chose Winforms toolkit because it worked out of the box and should also run on Linux
-# @args -t:winexe
 
 # TODOs
 # -----
 # Players other than the caller need the opportunity to go alone.
-# IWBNI there was a scrolling banner saying "Point made"/"Euchre!"/"Lone euchre"/"Four!"
 # When the Benny is turned, dealer needs to choose a suit
 # Enable the user to choose between UK and US rules
 
-use System.Windows.Forms
 use System.Threading
 use System.Collections
-
 
 class Banner
 	# Display a scrolling banner message on a console
@@ -49,7 +48,7 @@ class Banner
 			.width = width
 
 	var _letters=[
-	"  A  BBBB  CCC DDD  EEEEEFFFFF GGG H   HIIIIIJJJJJK   KL    M   MN   N OOO PPPP  QQQ RRRR  SSS TTTTTU   UV   VW   WX   XY   YZZZZZ     ",
+    "  A  BBBB  CCC DDD  EEEEEFFFFF GGG H   HIIIIIJJJJJK   KL    M   MN   N OOO PPPP  QQQ RRRR  SSS TTTTTU   UV   VW   WX   XY   YZZZZZ     ",
     " A A B   BC   CD  D E    F    G   GH   H  I      JK  K L    MM MMNN  NO   OP   PQ   QR   RS      T  U   U V V W   W X X   Y     Z      ",
     "AAAAABBBB C    D   DEEE  FFF  G GG HHHHH  I     J KKK  L    M M MN N NO   OPPPP Q Q QRRRR  SSS   T  U   U V V W W W  X    Y    Z       ",
     "A   AB   BC   CD  D E    F    G  G H   H  I  J J  K  K L    M   MN  NNO   OP    Q  QQR  R     S  T  UU UU  V  W W W X X   Y   Z        ",
@@ -63,12 +62,8 @@ class Banner
 			# c is not in scope 
 			assert all for c in text.toUpper get _font.indexOf(c) > -1
 
-			
-
 			# Create the message to be scrolled
-			#message = " " * .width
 			message = text.toUpper
-			#message += " " * .width
 
 			bigMessage = []
 			for line in 0:.fontHeight
@@ -383,10 +378,6 @@ class Pack implements IEnumerable<of Card> is abstract
 		""" Implements a Fisher-Yates shuffle """
 		ensure
 			.count == old .count
-			#
-			# Get an error here...
-			# not _cards.equals(old _cards)		
-			# _cards.sort.equals(old _cards.sort)
 		body
 			r = Random()
 			for i in _cards.count - 1 : 1 : -1
@@ -416,8 +407,8 @@ class Pack52 inherits Pack
         and ensure
             _cards.count == 52
         body
-            for suit in Suits() # hmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
-                for value in Values() # hmmmmmmmmmmmmmmmmmmmmmmmm
+            for suit in Suits()
+                for value in Values()
                     _cards.add(Card(value, suit))
 
 class EuchrePack inherits Pack
@@ -466,8 +457,6 @@ class CardGameRules is abstract
         require
             c1.value in Values()
             c2.value in Values()
-        # ensure
-        #     result == -1 or result == 0 or result == 1
         test
             card1 = Card('jack', 'spades')
             card2 = Card('jack', 'spades')
@@ -516,8 +505,6 @@ class EuchreGameRules inherits CardGameRules
 	# functions
 	#
 	def isTrump(card as Card, trumps as Suit) as bool is shared
-		# require
-		#	card in EuchrePack()
 		test
 			# Benny is always a trump
 			for suit in Suits()
@@ -549,9 +536,6 @@ class EuchreGameRules inherits CardGameRules
             CardCompare.FIRST_CARD_IS_BETTER if c1>c2,
             CardCompare.CARDS_ARE_THE_SAME_VALUE if c1==c2,
             CardCompare.SECOND_CARD_IS_BETTER if c1<c2
-        #require
-        #    c1 in EuchrePack()
-        #    c2 in EuchrePack()
 		"""
 		test
             card1 = Card('jack', 'spades')
@@ -1127,20 +1111,6 @@ class ComputerEuchrePlayer inherits EuchrePlayer
 		Thread.sleep(2000)
 		base.think
 		.clearThinking
-
-class GameForm inherits Form
-    cue init
-        base.init
-        .text = 'Sample Form'
-        flp = FlowLayoutPanel(parent=this, dock=DockStyle.Fill, flowDirection=FlowDirection.TopDown)
-        b = Button(parent=flp, autoSize=true, text='One', tag=1)
-        listen b.click, ref .handleClick
-        b = Button(parent=flp, autoSize=true, text='Two', tag=2)
-        listen b.click, ref .handleClick
-
-    def handleClick(sender, args as EventArgs)
-        MessageBox.show(this, 'You clicked [sender.text]/[sender.tag]', 'Click')
-
         
 class Euchre
 	var _north as EuchrePlayer = ComputerEuchrePlayer('North', 20, 4)
@@ -1227,9 +1197,6 @@ class Euchre
 			return 'Yes'
 		else
 			return 'No'
-
-    def guimain has STAThread
-		Application.run(GameForm())
 
 	def showScores
 		Console.setCursorPosition(60, 5)
