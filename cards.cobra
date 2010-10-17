@@ -1,0 +1,1505 @@
+﻿"""
+This is some Cobra code representing a typical pack of playing cards.
+"""
+
+# For Winforms
+# Chose Winforms toolkit because it worked out of the box and should also run on Linux
+# @args -t:winexe
+
+# TODOs
+# -----
+# Players other than the caller need the opportunity to go alone.
+# IWBNI there was a scrolling banner saying "Point made"/"Euchre!"/"Lone euchre"/"Four!"
+# When the Benny is turned, dealer needs to choose a suit
+# Enable the user to choose between UK and US rules
+
+use System.Windows.Forms
+use System.Threading
+use System.Collections
+
+
+class Banner
+	# Display a scrolling banner message on a console
+	pro left from var as int
+	pro top from var as int
+	pro width from var as int
+
+	invariant
+		_letters.count == .fontHeight
+
+	pro fontWidth as int
+		get
+			return 5
+
+	pro fontHeight as int
+		get
+			return 5
+
+	pro spaceBetweenLetters from var as int = 2
+
+	cue init(left, top, width)
+		require
+			width > 0
+			left >= 0
+			top >= 0
+		body
+			base.init
+			.left = left
+			.top = top
+			.width = width
+
+	var _letters=[
+	"  A  BBBB  CCC DDD  EEEEEFFFFF GGG H   HIIIIIJJJJJK   KL    M   MN   N OOO PPPP  QQQ RRRR  SSS TTTTTU   UV   VW   WX   XY   YZZZZZ     ",
+    " A A B   BC   CD  D E    F    G   GH   H  I      JK  K L    MM MMNN  NO   OP   PQ   QR   RS      T  U   U V V W   W X X   Y     Z      ",
+    "AAAAABBBB C    D   DEEE  FFF  G GG HHHHH  I     J KKK  L    M M MN N NO   OPPPP Q Q QRRRR  SSS   T  U   U V V W W W  X    Y    Z       ",
+    "A   AB   BC   CD  D E    F    G  G H   H  I  J J  K  K L    M   MN  NNO   OP    Q  QQR  R     S  T  UU UU  V  W W W X X   Y   Z        ",
+    "A   ABBBB  CCC DDD  EEEEEF     GG  H   HIIIII J   K   KLLLLLM   MN   N OOO P     QQ QR   R SSS   T   UUU   V   W W X   X  Y  ZZZZZ     "]
+
+	var _font = [c'A', c'B', c'C', c'D', c'E', c'F', c'G', c'H', c'I', c'J', c'K', c'L', c'M', c'N', c'O', c'P', c'Q', c'R', c'S', c'T', c'U', c'V', c'W', c'X', c'Y', c'Z', c' ']
+
+	def scroll(text as String)
+		body
+			# TODO: would like the following in a require statement, but it says
+			# c is not in scope 
+			assert all for c in text.toUpper get _font.indexOf(c) > -1
+
+			
+
+			# Create the message to be scrolled
+			#message = " " * .width
+			message = text.toUpper
+			#message += " " * .width
+
+			bigMessage = []
+			for line in 0:.fontHeight
+				bigMessage.add("".padLeft(.width))
+			assert bigMessage.count == .fontHeight
+
+			for c in message
+				for line in 0:.fontHeight
+					offset = _font.indexOf(c) * .fontWidth
+					space = "".padLeft(.spaceBetweenLetters)
+					bigMessage[line] += _letters[line].substring(offset, .fontWidth) + space
+
+			for line in 0:.fontHeight
+				bigMessage[line] += "".padLeft(.width)
+
+			for bigLine in bigMessage
+				assert bigLine.length == message.length * (.fontWidth + .spaceBetweenLetters) + .width * 2
+
+			for i in 0:bigMessage[0].length - .width
+				for line in 0:.fontHeight
+					Console.setCursorPosition(.left, .top + line)
+					print bigMessage[line].substring(i, .width)
+				Thread.sleep(30)
+
+class CollectionUtils
+	# find item in sequenceWithItem, return the corresponding element of otherSequence
+	def getCorrespondingItem(item, sequenceWithItem, otherSequence) as Object is shared
+		require
+			item in sequenceWithItem
+			sequenceWithItem.count == otherSequence.count
+		body
+			i = sequenceWithItem.indexOf(item)
+			e = otherSequence.getEnumerator
+			e.moveNext
+			while i > 0
+				e.moveNext
+				i -= 1
+			return e.current
+
+
+class NamedItem
+    """ Common base class for suits and cards """
+    pro name from var as String
+	pro shortname from var as String
+
+    cue init(name as String, shortname as String)
+        base.init
+        _name = name
+		_shortname = shortname
+
+    def toString as String is override
+		return _name
+
+	def print
+		print _shortname
+
+    def equals(other) as bool is override
+        test
+            n1 as NamedItem? = NamedItem('abc', 'A')
+            n2 = NamedItem('abc', 'B')
+            n3 = NamedItem('def', 'C')
+            assert n1 == n2
+            assert n2 == n1
+            assert n1 == n1
+            assert n1 <> nil
+            assert n1 <> n3
+        body
+            if other == nil, return false
+            if other inherits NamedItem, return .name == other.name
+            return false
+
+    def getHashCode as int is override
+        return _name.getHashCode
+
+class Suit inherits NamedItem
+    cue init(name as String, shortname as String)
+        base.init(name, shortname)
+
+class Value inherits NamedItem
+    cue init(name as String, shortname as String)
+        base.init(name, shortname)
+
+class Suits implements ICollection<of Suit>
+    shared
+        pro names from var = {'hearts': '♥', 'clubs': '♣', 'diamonds': '♦', 'spades': '♠'}
+		pro colors from var = {'hearts': ConsoleColor.Red, 'clubs': ConsoleColor.Black, 'diamonds': ConsoleColor.Red, 'spades': ConsoleColor.Black}
+		var singleCharForms = [c'H', c'C', c'D', c'S']
+
+		pro hearts from var as Suit = Suit('hearts', '♥')
+		pro clubs from var as Suit = Suit('clubs', '♣')
+		pro diamonds from var as Suit = Suit('diamonds', '♦')
+		pro spades from var as Suit = Suit('spades', '♠')
+
+		var _suits as List<of Suit> = [.hearts, .clubs, .diamonds, .spades]
+
+    def getEnumerator as IEnumerator<of Suit>
+        return _suits.getEnumerator
+
+    def getEnumerator as System.Collections.IEnumerator
+        implements System.Collections.IEnumerable
+        return .getEnumerator
+
+	def getFromSingleChar(c as char) as Suit is shared
+		return CollectionUtils.getCorrespondingItem(c, .singleCharForms, Suits()) to Suit
+
+    ## ICollection ##
+
+	get count as int
+		return _suits.count
+
+    get isReadOnly as bool
+        return true
+
+    def add(item as Suit)
+		assert false
+        _suits.add(item)
+
+    def clear
+		assert false
+        _suits.clear
+
+    def contains(item as Suit) as bool
+        return _suits.contains(item)
+
+    def remove(item as Suit) as bool
+		assert false
+        return _suits.remove(item)
+
+    def copyTo(array as Suit[], index as int)
+        _suits.copyTo(array, index)
+
+
+class Values implements ICollection<of Value>
+    shared
+        pro names from var = {'ace': 'A', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', _
+		'nine': '9', 'ten': '10', 'jack': 'J', 'queen': 'Q', 'king': 'K'}
+		var singleCharForms = [c'A', c'2', c'3', c'4', c'5', c'6', c'7', c'8', c'9', c'T', c'J', c'Q', c'K']
+
+    var _values = List<of Value>()
+
+    cue init
+        ensure
+            _values.count == _names.count
+        body
+            base.init
+            for name, short in _names
+                _values.add(Value(name, short))
+
+    def getEnumerator as IEnumerator<of Value>
+        return _values.getEnumerator
+
+    def getEnumerator as System.Collections.IEnumerator
+        implements System.Collections.IEnumerable
+        return .getEnumerator
+
+	def getFromSingleChar(c as char) as Value is shared
+		v as ICollection<of Value> = Values()
+		return CollectionUtils.getCorrespondingItem(c, .singleCharForms, v) to Value
+
+    ## ICollection ##
+
+	get count as int
+		return _values.count
+
+    get isReadOnly as bool
+        return true
+
+    def add(item as Value)
+		assert false
+        _values.add(item)
+
+    def clear
+		assert false
+        _values.clear
+
+    def contains(item as Value) as bool
+        return _values.contains(item)
+
+    def remove(item as Value) as bool
+		assert false
+        return _values.remove(item)
+
+    def copyTo(array as Value[], index as int)
+        _values.copyTo(array, index)
+
+
+class Card
+    """ Represents a single playing card (suit/value pair) """
+    pro suit from var as Suit
+    pro value from var as Value
+
+    def _init(value as Value, suit as Suit)
+		"""
+		Shared initialisation for the various constructors.
+		"""
+        _suit, _value = suit, value
+
+    cue init(value as Value, suit as Suit)
+        base.init
+        _init(value, suit)
+
+    cue init(value as String, suit as String)
+        require
+            value in Values.names.keys
+            suit in Suits.names.keys
+        body
+            base.init
+            v = Value(value, Values.names[value])
+            s = Suit(suit, Suits.names[suit])
+            _init(v, s)
+
+	cue init(value as Value, suit as String)
+		require
+			suit in Suits.names.keys
+		body
+			base.init
+			s = Suit(suit, Suits.names[suit])
+			_init(value, s)
+
+	cue init(value as String, suit as Suit)
+		require
+			value in Values.names.keys
+		body
+			base.init
+			v = Value(value, Values.names[value])
+			_init(v, suit)
+
+	cue init(valueAndSuit as String)
+		require
+			valueAndSuit.length == 2
+		test
+			fourOfHearts1 = Card('4H')
+			fourOfHearts2 = Card('four', 'hearts')
+			fiveOfHearts = Card('5H')
+			assert fourOfHearts1.equals(fourOfHearts2)
+			assert not fourOfHearts1.equals(fiveOfHearts)
+		body
+			base.init
+			v as Value = Values.getFromSingleChar(valueAndSuit[0])
+			s as Suit = Suits.getFromSingleChar(valueAndSuit[1])
+			_init(v, s)
+			
+
+    def equals(other) as bool is override
+        test
+			cards = [Card('2S'), Card('3S'), Card('2C'), Card('JD'), Card('2S')]
+
+			#            2S     3S     2C     JD     2D
+			matches =  [[true,  false, false, false, true ], _ # 2S
+                        [false, true,  false, false, false], _ # 3S
+					    [false, false, true,  false, false], _ # 2C
+					    [false, false, false, true,  false], _ # JD
+					    [true,  false, false, false, true ]]   # 2S
+
+			# check matches is symmetric
+			assert matches.count == 5
+			assert matches[0].count == 5
+			for i in [0, 1, 2, 3, 4]
+				for j in [0, 1, 2, 3, 4]
+					assert matches[i][j] == matches[j][i]			
+
+			for i, testCard1 in cards.numbered
+				for j, testCard2 in cards.numbered
+					assert testCard1.equals(testCard2) == matches[i][j]
+			
+			aCard = cards[1]
+			assert not aCard.equals(nil)
+			assert not aCard.equals('foo')
+        body
+            if other == nil, return false
+            if other inherits Card, return .suit.equals(other.suit) and .value.equals(other.value)
+            return false
+
+    def getHashCode as int is override
+        return .suit.getHashCode ^ .value.getHashCode # XOR fields
+
+    def toString as String is override
+        return '[_value.shortname][_suit.shortname]'
+
+	def printInColor
+		require
+			Suits.colors.containsKey(_suit.name)
+		body
+			oldForegroundColor = Console.foregroundColor
+			oldBackgroundColor = Console.backgroundColor
+			Console.backgroundColor = ConsoleColor.White
+			Console.foregroundColor = Suits.colors[_suit.name]
+			Console.write('[_value.shortname][_suit.shortname]')
+			Console.foregroundColor = oldForegroundColor
+			Console.backgroundColor = oldBackgroundColor
+    
+
+class Pack implements IEnumerable<of Card> is abstract
+    """ A pack of some cards """
+    var _cards = List<of Card>()
+    cue init
+        base.init
+        .buildPack
+
+    def buildPack is abstract
+        """ Add the cards to the pack. Derived classes must implement this. """
+        require
+            _cards.count == 0
+        ensure
+            _cards.count > 0
+
+    pro count as int
+        get
+            return _cards.count
+
+	def shuffle
+		""" Implements a Fisher-Yates shuffle """
+		ensure
+			.count == old .count
+			#
+			# Get an error here...
+			# not _cards.equals(old _cards)		
+			# _cards.sort.equals(old _cards.sort)
+		body
+			r = Random()
+			for i in _cards.count - 1 : 1 : -1
+				j = r.next(0, i + 1) # inclusive lower, exclusive upper
+				_cards[i], _cards[j] = _cards[j], _cards[i]
+
+	def toString as String is override
+		return _cards.join(',')
+
+    def getEnumerator as IEnumerator<of Card>
+        return _cards.getEnumerator
+
+    def getEnumerator as System.Collections.IEnumerator
+        implements System.Collections.IEnumerable
+        return .getEnumerator
+
+
+class Pack52 inherits Pack
+    """ A standard pack of 52 cards """
+	invariant
+		_cards.count == 52
+
+    cue init
+        base.init
+
+    def buildPack is override
+        and ensure
+            _cards.count == 52
+        body
+            for suit in Suits() # hmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+                for value in Values() # hmmmmmmmmmmmmmmmmmmmmmmmm
+                    _cards.add(Card(value, suit))
+
+class EuchrePack inherits Pack
+	""" A 25-card pack for playing UK Euchre """
+
+	var _benny as Card is shared
+
+	get benny as Card is shared
+		return _benny
+
+	invariant
+		_cards.count == 25
+
+	cue init
+		base.init		
+
+	def buildPack is override
+		and ensure
+			_cards.count == 25
+		body
+			_benny = Card('two', 'spades')
+			_cards.add(_benny)
+			for suit as Suit in Suits()
+				_cards.add(Card('ace', suit))
+				for value as String in Values.names.keys.toList[8:]
+					_cards.add(Card(value, suit))
+
+
+# Ideally this whole class would be declared as shared, but if you do that
+# you can't inherit from it. Therefore, just have a normal class with only
+# static functions.
+class CardGameRules is abstract
+    """ Base class for a card game. """
+
+	enum CardCompare
+		FIRST_CARD_IS_BETTER
+		CARDS_ARE_THE_SAME_VALUE
+		SECOND_CARD_IS_BETTER
+
+    def compareCards(c1 as Card, c2 as Card, aceIsHigh as bool) as CardCompare is shared
+        """
+            CardCompare.FIRST_CARD_IS_BETTER if c1>c2,
+            CardCompare.CARDS_ARE_THE_SAME_VALUE if c1==c2,
+            CardCompare.SECOND_CARD_IS_BETTER if c1<c2
+        """
+        require
+            c1.value in Values()
+            c2.value in Values()
+        # ensure
+        #     result == -1 or result == 0 or result == 1
+        test
+            card1 = Card('jack', 'spades')
+            card2 = Card('jack', 'spades')
+            card3 = Card('ten', 'hearts')
+			card4 = Card('ace', 'hearts')
+            assert .compareCards(card1, card1, false) == CardCompare.CARDS_ARE_THE_SAME_VALUE
+            assert .compareCards(card1, card2, false) == CardCompare.CARDS_ARE_THE_SAME_VALUE
+            assert .compareCards(card2, card1, false) == CardCompare.CARDS_ARE_THE_SAME_VALUE
+            assert .compareCards(card3, card1, false) == CardCompare.SECOND_CARD_IS_BETTER
+            assert .compareCards(card1, card3, false) == CardCompare.FIRST_CARD_IS_BETTER
+			assert .compareCards(card3, card4, false) == CardCompare.FIRST_CARD_IS_BETTER
+			assert .compareCards(card3, card4, true) == CardCompare.SECOND_CARD_IS_BETTER
+			assert .compareCards(card2, card4, false) == CardCompare.FIRST_CARD_IS_BETTER
+			assert .compareCards(card2, card4, true) == CardCompare.SECOND_CARD_IS_BETTER
+        body
+            if c1.value == c2.value
+                return CardCompare.CARDS_ARE_THE_SAME_VALUE
+			if aceIsHigh
+				if c1.value.name == 'ace'
+					return CardCompare.FIRST_CARD_IS_BETTER
+				if c2.value.name == 'ace'
+					return CardCompare.SECOND_CARD_IS_BETTER
+            for v as Value in Values()
+                if c1.value == v
+					# found card 1 first so card 2 is better
+                    return CardCompare.SECOND_CARD_IS_BETTER
+                if c2.value == v
+					# found card 2 first so card 1 is better
+                    return CardCompare.FIRST_CARD_IS_BETTER
+            trace c1.value, c2.value
+            throw FallThroughException(c1)
+
+
+class EuchreGameRules inherits CardGameRules
+
+	#
+	# various optional rules
+	#
+
+	# true if you can order up your partner and keep them up, false otherwise
+	pro canOrderUpPartner as bool is shared
+		get
+			return false
+
+	#
+	# functions
+	#
+	def isTrump(card as Card, trumps as Suit) as bool is shared
+		# require
+		#	card in EuchrePack()
+		test
+			# Benny is always a trump
+			for suit in Suits()
+				assert .isTrump(EuchrePack.benny, suit)
+			# Check left bower
+			assert .isTrump(Card('jack', 'diamonds'), Suits.hearts)
+			# Check nine of trumps
+			assert .isTrump(Card('nine', 'diamonds'), Suits.diamonds)
+			assert not .isTrump(Card('nine', 'diamonds'), Suits.hearts)
+		body
+			if card.suit == trumps
+				return true
+			if card.value.name == 'two'
+				assert card.suit.name == 'spades'
+				return true
+			if card.value.name == 'jack'
+				branch trumps.name
+					on 'hearts', return card.suit.equals(Suits.diamonds)
+					on 'clubs', return card.suit.equals(Suits.spades)
+					on 'diamonds', return card.suit.equals(Suits.hearts)
+					on 'spades', return card.suit.equals(Suits.clubs)
+					else
+						throw FallThroughException(trumps)
+			return false # required for compiler
+			
+	# demanded, if supplied, is the suit of the first card played in this hand
+    def compareCards(c1 as Card, c2 as Card, trumps as Suit, demanded as Suit?) as CardGameRules.CardCompare is shared
+        """
+            CardCompare.FIRST_CARD_IS_BETTER if c1>c2,
+            CardCompare.CARDS_ARE_THE_SAME_VALUE if c1==c2,
+            CardCompare.SECOND_CARD_IS_BETTER if c1<c2
+        #require
+        #    c1 in EuchrePack()
+        #    c2 in EuchrePack()
+		"""
+		test
+            card1 = Card('jack', 'spades')
+            card2 = Card('jack', 'clubs')
+            card3 = Card('ten', 'hearts')
+			card4 = Card('ace', 'spades')
+
+			for card in [card1, card2, card3, card4]
+				for trump in Suits()
+					for demandedSuit in Suits()
+						# identical cards are same regardless of trumps
+						assert .compareCards(card, card, trump, demandedSuit) == CardGameRules.CardCompare.CARDS_ARE_THE_SAME_VALUE
+						# benny is always the best
+						assert .compareCards(card, EuchrePack.benny, trump, demandedSuit) == CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+
+			# compare bowers by trump
+			assert .compareCards(card1, card2, Suits.spades, nil) == CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+			assert .compareCards(card1, card2, Suits.clubs, nil) == CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+			assert .compareCards(card1, card2, Suits.hearts, nil) == CardGameRules.CardCompare.CARDS_ARE_THE_SAME_VALUE
+			assert .compareCards(card1, card2, Suits.diamonds, nil) == CardGameRules.CardCompare.CARDS_ARE_THE_SAME_VALUE
+
+			# compare bower and ace by trump
+			assert .compareCards(card1, card4, Suits.spades, nil) == CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+			assert .compareCards(card1, card4, Suits.clubs, nil) == CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+			assert .compareCards(card1, card4, Suits.diamonds, nil) == CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+			assert .compareCards(card1, card4, Suits.hearts, nil) == CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+
+			# a card in the demanded suit is better than a higher card in a non-demanded, non-trump suit
+			assert .compareCards(card3, card4, Suits.diamonds, Suits.hearts) == CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+			assert .compareCards(card3, card4, Suits.spades, Suits.hearts) == CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+		body
+			if c1 == c2
+				return CardGameRules.CardCompare.CARDS_ARE_THE_SAME_VALUE
+			if .isTrump(c1, trumps) and not .isTrump(c2, trumps)
+				return CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+			else if not .isTrump(c1, trumps) and .isTrump(c2, trumps)
+				return CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+			else if not .isTrump(c1, trumps) and not .isTrump(c2, trumps)
+				if not demanded
+					return CardGameRules.compareCards(c1, c2, true)
+				if c1.suit.equals(demanded) and c2.suit.equals(demanded)
+					return CardGameRules.compareCards(c1, c2, true)
+				if not c1.suit.equals(demanded) and not c2.suit.equals(demanded)
+					return CardGameRules.compareCards(c1, c2, true)
+				if c1.suit.equals(demanded)				
+					return CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+				assert c2.suit.equals(demanded)
+				return CardGameRules.CardCompare.SECOND_CARD_IS_BETTER					
+			else
+				# both trumps
+				if c1.value.name == 'two'
+					assert c1.suit.equals(Suits.spades)
+					return CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+				if c2.value.name == 'two'
+					assert c2.suit.equals(Suits.spades)
+					return CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+				if c1.value.name == 'jack' and c1.suit.equals(trumps)
+					return CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+				if c2.value.name == 'jack' and c2.suit.equals(trumps)
+					return CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+				if c1.value.name == 'jack'
+					return CardGameRules.CardCompare.FIRST_CARD_IS_BETTER
+				if c2.value.name == 'jack'
+					return CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+				return CardGameRules.compareCards(c1, c2, true)
+
+	# Gets the suit of the card as far as the game is concerned
+	def getRealSuit(card as Card, trumps as Suit) as Suit is shared
+		test
+			s = Suits()
+			assert all for trumps in s get .getRealSuit(EuchrePack.benny, trumps) == trumps
+			# left bower
+			assert .getRealSuit(Card('jack', 'diamonds'), Suits.hearts) == Suits.hearts
+			# but not in general
+			assert .getRealSuit(Card('jack', 'diamonds'), Suits.clubs) == Suits.diamonds
+		body
+			if EuchreGameRules.isTrump(card, trumps), return trumps
+			return card.suit
+
+
+# A hand of some cards, as held by a player
+class Hand
+	pro cards from var = List<of Card>()
+
+	cue init
+		base.init
+
+	# Deal a card (add it to the hand)
+	def deal(c as Card)
+		ensure
+			_cards.count == old _cards.count + 1
+		body
+			_cards.add(c)	
+
+	# Play a card from the hand
+	def play(c as Card)
+		require
+			c in _cards
+		ensure
+			_cards.count == old _cards.count - 1
+		body
+			_cards.remove(c)
+
+	def toString as String is override
+		return (for card in _cards get card.toString).join(', ')
+
+	def printInColor
+		for card in _cards
+			card.printInColor
+			Console.write(' ')
+		for blank in _cards.count : 5
+			Console.write('   ')
+		Console.writeLine
+
+	test
+		c = Card('three', 'hearts')
+		aHand = Hand()
+		assert aHand._cards.count == 0
+		aHand.deal(c)
+		assert aHand._cards.count == 1
+		aHand.play(c)
+		assert aHand._cards.count == 0
+
+
+class EuchrePlayerHand inherits Hand
+	invariant
+		_cards.count <= 5
+	
+	cue init
+		base.init
+
+	# alternative ctor that takes five cards
+	cue init(c0 as Card, c1 as Card, c2 as Card, c3 as Card, c4 as Card)
+		base.init
+		.cards.add(c0)
+		.cards.add(c1)
+		.cards.add(c2)
+		.cards.add(c3)
+		.cards.add(c4)
+
+
+# A player of the game
+class Player is abstract
+	pro name from var as String
+	pro hand from var as Hand
+
+	cue init(name as String)
+		body
+			base.init
+			_name = name
+			_hand = Hand()
+
+	def toString as String is override
+		return '[_name]: [_hand]'
+
+	def printInColor
+		Console.write('[_name]: ')
+		_hand.printInColor
+
+	# Emulate thinking time for computer players
+	def think
+		pass
+
+
+class EuchrePlayer inherits Player is abstract
+	invariant
+		.isDealer implies not .isDealersPartner
+		.isDealersPartner implies not .isDealer
+		.isGoingAlone implies not .isDown
+		.isDown implies not .isGoingAlone
+
+	pro isDealer from var as bool
+	pro isDealersPartner from var as bool
+	pro isGoingAlone from var as bool
+	pro isDown from var as bool
+
+	pro textBoxLeft from var as int
+	pro textBoxTop from var as int
+
+	# vertical text offsets w.r.t. .textBoxTop
+	const _dealerOffset = 1
+	const _suitOffset = 2
+	const _statusOffset = 4
+	const _playedCardOffset = 5
+	const _thinkingOffset = 6
+
+	cue init(name as String, left as int, top as int)
+		base.init(name)
+		_hand = EuchrePlayerHand()
+		.textBoxLeft = left
+		.textBoxTop = top
+
+	# show the status, e.g. "Pass"
+	def showStatus(status as String)
+		require
+			status.length < 15 # so clearing it works
+		body
+			Console.setCursorPosition(.textBoxLeft, .textBoxTop + _statusOffset)
+			Console.write('              ')
+			Console.setCursorPosition(.textBoxLeft, .textBoxTop + _statusOffset)
+			Console.write(status)
+
+	def clearSuit
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + _suitOffset)
+		Console.write('              ')
+
+	def showSuit(suit as Suit)
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + _suitOffset)
+		oldForegroundColor = Console.foregroundColor
+		Console.foregroundColor = ConsoleColor.Green	
+		Console.write(suit.name[0:1].toUpper + suit.name[1:])
+		if .isGoingAlone
+			Console.write(' ALONE')
+		Console.foregroundColor = oldForegroundColor
+
+    def clearThinking
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + _thinkingOffset)
+		Console.write('           ')
+
+	def showThinking
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + _thinkingOffset)
+		Console.write('Thinking...')
+
+	def wantsTrump(card as Card) as bool is abstract
+		require
+			.hand.cards.count == 5
+			not card.equals(EuchrePack.benny) # wantsBenny should be called instead
+			not .isGoingAlone # should not have been set yet
+
+	def wantsBenny(calledSuit as Suit) as bool is abstract
+		require
+			not .isGoingAlone # should not have been set yet
+		ensure
+			.isDealer implies result
+
+	def chooseOtherTrump(turnedCard as Card) as Suit? is abstract
+		require
+			.hand.cards.count == 5
+			not turnedCard.equals(EuchrePack.benny) # can't turn the Benny
+			not .isGoingAlone # should not have been set yet
+
+
+	def callSuitForBenny as Suit is abstract
+		require
+			.isDealer
+			not .isGoingAlone # should not have been set yet
+
+
+	# Pick up the card turned over to determine suit
+	# TODO: Probably have to pass suit in as well in case the card is the Benny
+	# Returns the discarded card, mainly for ease of testing
+	def pickUpTurnedCard(turnedCard as Card) as Card is abstract
+		require
+			.hand.cards.count == 5
+		ensure
+			.hand.cards.count == 5
+
+	def play(trick as List<of Card>, trumps as Suit) as Card is abstract
+		require
+			.hand.cards.count > 0
+			not .isDown
+		ensure
+			.hand.cards.count == old .hand.cards.count - 1
+			.isValidPlay(old trick, result, trumps, old _hand)
+
+	def isValidPlay(trick as List<of Card>, card as Card, trumps as Suit, hand as Hand) as bool is shared
+		"""
+		This should only be called from isValidPlay(trick as List<of Card>, card as Card, trumps as Suit)
+		and play()'s ensure
+		"""
+		require
+			trick.count < 4
+		test
+			trick as List<of Card> = List<of Card>()
+			nineOfDiamonds = Card('nine', 'diamonds')
+			hearts = Card('three', 'hearts').suit
+			dummyHand = Hand()
+			dummyHand.cards.add(nineOfDiamonds)
+			assert .isValidPlay(trick, nineOfDiamonds, hearts, dummyHand)
+
+			# if you have a card of the demanded suit then you have to play it
+			trick.add(Card('ten', 'diamonds'))
+			tenOfSpades = Card('ten', 'spades')
+			dummyHand.cards.add(tenOfSpades)
+			assert .isValidPlay(trick, nineOfDiamonds, hearts, dummyHand)
+			assert not .isValidPlay(trick, tenOfSpades, hearts, dummyHand)
+
+			# what if trumps is demanded
+			someHand = EuchrePlayerHand(Card('JH'), Card('JD'), Card('2S'), Card('TH'), Card('AC'))
+
+			someTrick as List<of Card> = List<of Card>()
+			someTrick.add(Card('nine', 'hearts'))
+			
+			assert .isValidPlay(someTrick, someHand.cards[0], hearts, someHand)
+			assert .isValidPlay(someTrick, someHand.cards[1], hearts, someHand)
+			assert .isValidPlay(someTrick, someHand.cards[2], hearts, someHand)
+			assert .isValidPlay(someTrick, someHand.cards[3], hearts, someHand)
+			assert not .isValidPlay(someTrick, someHand.cards[4], hearts, someHand)
+		body
+			if trick.count == 0, return true # first to play so anything goes
+
+			demanded as Suit = EuchreGameRules.getRealSuit(trick[0], trumps)
+
+			realSuitsInHand = for c as Card in hand.cards get EuchreGameRules.getRealSuit(c, trumps)
+
+			# no matching cards, so can play anything
+			if demanded not in realSuitsInHand, return true
+
+			return EuchreGameRules.getRealSuit(card, trumps) == demanded
+
+	def isValidPlay(trick as List<of Card>, card as Card, trumps as Suit) as bool
+		require
+			# card in .hand.cards -- sometimes called after card has been played, so can't do this
+			trick.count < 4
+		body
+			# there must be at least one valid card to play
+			assert any for handCard in .hand.cards get .isValidPlay(trick, handCard, trumps, .hand)
+			return .isValidPlay(trick, card, trumps, .hand)
+
+
+	def drawPlayedCard(card as Card)
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + _playedCardOffset)
+		card.printInColor
+
+	def clearPlayedCard
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + _playedCardOffset)
+		print '   '
+
+	# Display the player info on the console
+	def drawText
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop)
+		Console.write(.name)
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + _dealerOffset)
+		if .isDealer
+			oldForegroundColor = Console.foregroundColor
+			Console.foregroundColor = ConsoleColor.DarkRed			
+			Console.write('DEALER')
+			Console.foregroundColor = oldForegroundColor
+		else
+			Console.write('      ')
+			
+
+class HumanEuchrePlayer inherits EuchrePlayer
+	cue init(name as String, left as int, top as int)
+		base.init(name, left, top)
+
+	const PLAYER_INPUT_TEXT_X = 0
+	const PLAYER_INPUT_TEXT_Y = 23
+
+	# vertical offset of player's hand from top of box
+	const _playerHandOffset = 3
+
+	def clearPlayerInputText is shared, private
+		Console.setCursorPosition(.PLAYER_INPUT_TEXT_X, .PLAYER_INPUT_TEXT_Y)
+		Console.write('                                                                               ')
+
+	def getPlayerInput(prompt as String, options as List<of char>) as char is shared
+		require
+			prompt.length > 0
+			options.count > 0
+			options.join('').toUpper == options.join('') # all uoptions are upper case
+			c'\0' not in options
+		body
+			.clearPlayerInputText
+			Console.setCursorPosition(.PLAYER_INPUT_TEXT_X, .PLAYER_INPUT_TEXT_Y)
+			Console.write(prompt + ' \[' + options.join(', ') + ']')
+			result as char = c'\0'
+			while result not in options
+				result = Console.readKey(false).keyChar
+				if result, result = result.toUpper
+			.clearPlayerInputText
+			return result
+
+	# TODO: don't ask if dealer's partner and first time round
+	# because you have to order up (if rule is true)
+	def askAboutGoingAlone
+		# if suit and .isDealersPartner, return
+		result = .getPlayerInput('Would you like to go alone?', [c'Y', c'N'])
+		if result == c'Y'
+			.isGoingAlone = true
+
+	def wantsTrump(card as Card) as bool is override
+		body
+			result = .getPlayerInput('Would you like [card.suit] as trumps?', [c'Y', c'N'])
+			if result == c'Y'
+				.showStatus('Order up')
+				.askAboutGoingAlone
+				.showSuit(card.suit)
+				return true
+			else
+				.showStatus('Pass')
+				return false
+
+	def wantsBenny(calledSuit as Suit) as bool is override
+		body
+			if .isDealer
+				return true
+			else
+				result = .getPlayerInput('Would you like [calledSuit] as trumps?', [c'Y', c'N'])
+				if result == c'Y'
+					.showStatus('Ordered up the Benny')
+					.askAboutGoingAlone
+					.showSuit(calledSuit)
+					return true
+				else
+					.showStatus('Pass')
+					return false
+
+	def chooseOtherTrump(turnedCard as Card) as Suit? is override
+		options = for suit in Suits() get suit.name[0].toUpper
+		options.remove(turnedCard.suit.name[0].toUpper)
+		options.add(c'N')
+		result = .getPlayerInput('Pick a suit (not [turnedCard.suit]), or None.', options)
+		if result == c'N'
+			.showStatus('Pass')
+			return nil
+		else
+			for suit as Suit in Suits()
+				if suit.name[0].toUpper.compareTo(result) == 0
+					.askAboutGoingAlone
+					.showSuit(suit)
+					return suit
+			assert false
+			return nil # for compiler
+
+	def callSuitForBenny as Suit is override
+		suitLetters = for suit in Suits() get suit.name[0]		
+		result = .getPlayerInput('Pick a suit for trumps', suitLetters)
+		assert result in suitLetters
+		i = suitLetters.indexOf(result)
+		e = Suits().getEnumerator
+		e.moveNext
+		while i > 0
+			e.moveNext
+			i -= 1
+		return e.current
+
+	def pickUpTurnedCard(turnedCard as Card) as Card is override
+		result = .getPlayerInput('Pick card to discard (1-5 or 0 for turned card)', [c'0', c'1', c'2', c'3', c'4', c'5'])
+		if result == c'0'
+			return turnedCard
+		else
+			cardIndex as int = int.parse(result.toString) - 1
+			assert cardIndex >= 0 and cardIndex <= 4
+			removedCard = .hand.cards[cardIndex]
+			.hand.cards.removeAt(cardIndex)
+			.hand.cards.add(turnedCard)
+			.drawText
+			return removedCard
+
+	def play(trick as List<of Card>, trumps as Suit) as Card is override
+		allPossibleOptions = [c'1', c'2', c'3', c'4', c'5']
+		limitedOptions = allPossibleOptions[:.hand.cards.count]
+		assert limitedOptions.count > 0	
+		isValid = false
+		while not isValid
+			cardChar as char = .getPlayerInput('Choose card to play', limitedOptions)
+			cardInt as int = int.parse(cardChar.toString) - 1
+			assert cardInt >= 0 and cardInt <= .hand.cards.count - 1
+			cardToPlay as Card = .hand.cards[cardInt]
+			isValid = .isValidPlay(trick, cardToPlay, trumps)
+		.hand.play(cardToPlay)
+		.drawText
+		.drawPlayedCard(cardToPlay)
+		return cardToPlay
+
+	def drawText
+		base.drawText
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + _playerHandOffset)
+		.hand.printInColor
+		
+
+class ComputerEuchrePlayer inherits EuchrePlayer
+	cue init(name as String, left as int, top as int)
+		base.init(name, left, top)
+
+	# TODO this needs a test and needs to know what trumps are!
+	def wantsTrump(card as Card) as bool is override
+		body
+			assert not card.equals(EuchrePack.benny) # should call wantsBenny instead
+			# apart from the benny, we know prospective trumps are the same as the
+			# suit of the turned card passed in
+			trumpsInHand = 0
+			for handCard as Card in .hand.cards
+				if card.suit == EuchreGameRules.getRealSuit(handCard, card.suit), trumpsInHand += 1
+			# if this player is the dealer then count the turned card as in the hand
+			if .isDealer
+				trumpsInHand += 1
+
+			if trumpsInHand > 3
+				.showStatus('Going alone')
+				.isGoingAlone = true
+				.showSuit(card.suit)
+				return true
+			else if trumpsInHand > 2
+				.showStatus('Order up')
+				.showSuit(card.suit)
+				return true
+			else
+				.showStatus('Pass')
+				return false
+
+	def wantsBenny(calledSuit as Suit) as bool is override
+		body
+			if .isDealer
+				# TODO: might want to go alone
+				return true
+			else
+				# TODO beef up logic here
+				return .wantsTrump(Card('nine', calledSuit))
+
+
+	# TODO: This could be much more intelligent
+	def chooseOtherTrump(turnedCard as Card) as Suit? is override
+		body
+			assert not turnedCard.equals(EuchrePack.benny) # can't turn the Benny
+			for suit in Suits()
+				if suit <> turnedCard.suit
+					if .wantsTrump(Card('nine', suit))
+						.showSuit(suit)
+						return suit
+			.showStatus('Pass')
+			return nil
+
+	def callSuitForBenny as Suit is override
+		r = Random()
+		i = r.next(0, 5)
+		e = Suits().getEnumerator
+		e.moveNext
+		while i > 0
+			e.moveNext
+			i -= 1
+		return e.current
+
+	# TODO: Improve intelligence (this is just random)
+	def pickUpTurnedCard(turnedCard as Card) as Card is override
+		.hand.cards.add(turnedCard)
+		r = Random()
+		removeMe = r.next(0, 6)
+		removedCard = .hand.cards[removeMe]
+		.hand.cards.removeAt(removeMe)
+		return removedCard
+
+	# TODO: logic
+	def play(trick as List<of Card>, trumps as Suit) as Card is override
+		.think
+		r = Random()
+
+		isValid = false
+		while not isValid
+			playMe = r.next(0, .hand.cards.count)
+			playedCard = .hand.cards[playMe]
+			isValid = .isValidPlay(trick, playedCard, trumps)
+
+		.hand.play(playedCard)
+		.drawText
+		.drawPlayedCard(playedCard)
+		.think # think again so you can definitely see the card
+		return playedCard
+
+	def drawText
+		base.drawText
+		Console.setCursorPosition(.textBoxLeft, .textBoxTop + 3)
+		oldForegroundColor = Console.foregroundColor
+		Console.foregroundColor = ConsoleColor.Blue
+		for card in .hand.cards
+			Console.write('## ')
+		Console.write('              ')
+		Console.foregroundColor = oldForegroundColor
+
+	def think
+		.showThinking
+		Thread.sleep(2000)
+		base.think
+		.clearThinking
+
+class GameForm inherits Form
+    cue init
+        base.init
+        .text = 'Sample Form'
+        flp = FlowLayoutPanel(parent=this, dock=DockStyle.Fill, flowDirection=FlowDirection.TopDown)
+        b = Button(parent=flp, autoSize=true, text='One', tag=1)
+        listen b.click, ref .handleClick
+        b = Button(parent=flp, autoSize=true, text='Two', tag=2)
+        listen b.click, ref .handleClick
+
+    def handleClick(sender, args as EventArgs)
+        MessageBox.show(this, 'You clicked [sender.text]/[sender.tag]', 'Click')
+
+        
+class Euchre
+	var _north as EuchrePlayer = ComputerEuchrePlayer('North', 20, 4)
+	var _east as EuchrePlayer = ComputerEuchrePlayer('East', 40, 8)
+	var _south as EuchrePlayer = HumanEuchrePlayer('South', 20, 16)
+	var _west as EuchrePlayer = ComputerEuchrePlayer('West', 0, 8)
+
+	pro players from var as List<of EuchrePlayer>
+	var _pack = EuchrePack()
+
+	pro scoreNorthSouth from var as int = 0
+	pro scoreEastWest from var as int = 0
+
+	pro tricksNorthSouth from var as int = 0
+	pro tricksEastWest from var as int = 0
+
+    #                    x   y   width
+	var _banner = Banner(40, 18, 39)
+
+	# class invariants
+	invariant
+		.players.count == 4
+		.getLonePlayerCount in [0, 1]
+
+	cue init
+		base.init
+		.players = [_north,	_east, _south, _west]
+
+	def getLonePlayerCount as int
+		ensure
+			result in [0, 1]
+		body
+			return (for player in .players where player.isGoingAlone get player.isGoingAlone).count
+
+
+	def getPlayersStartingAt(player as EuchrePlayer) as IList<of EuchrePlayer>
+		require
+			player in .players
+			.players.count == 4
+		ensure
+			result.count == 4
+		test
+			e = Euchre()
+			assert e.getPlayersStartingAt(e.players[0]) == e.players
+			assert e.getPlayersStartingAt(e.players[1]) == [e.players[1], e.players[2], e.players[3], e.players[0]]
+			assert e.getPlayersStartingAt(e.players[2]) == [e.players[2], e.players[3], e.players[0], e.players[1]]
+			assert e.getPlayersStartingAt(e.players[3]) == [e.players[3], e.players[0], e.players[1], e.players[2]]
+		body
+			i = .players.indexOf(player)
+			assert i <> -1
+			return [.players[i], .players[(i+1)%4], .players[(i+2)%4], .players[(i+3)%4]]
+
+
+	# Get players who have not been turned down by their partners
+	def getActivePlayersStartingAt(player as EuchrePlayer) as IList<of EuchrePlayer>
+		require
+			not player.isDown
+		ensure
+			not any for p in result get p.isDown
+			result.count >= 2 and result.count <= 4
+		body
+			allPlayers = .getPlayersStartingAt(player)
+			upPlayers = for p in allPlayers where not p.isDown get p
+			return upPlayers
+
+
+	def getPartner(player as EuchrePlayer) as EuchrePlayer
+		require
+			player in .players
+		test
+			e = Euchre()
+			assert e.getPartner(e.players[0]) == e.players[2]
+			assert e.getPartner(e.players[1]) == e.players[3]
+			assert e.getPartner(e.players[2]) == e.players[0]
+			assert e.getPartner(e.players[3]) == e.players[1]
+		body
+			index = .players.indexOf(player) # 0..3
+			partnerIndex = (index + 2) % 4
+			assert partnerIndex >= 0 and partnerIndex <= 3
+			return .players[partnerIndex]
+
+	def yesNo(b as bool) as String is shared
+		if b
+			return 'Yes'
+		else
+			return 'No'
+
+    def guimain has STAThread
+		Application.run(GameForm())
+
+	def showScores
+		Console.setCursorPosition(60, 5)
+		Console.write('North-South')
+
+		Console.setCursorPosition(60, 6)
+		print '[.scoreNorthSouth] ([.tricksNorthSouth])'
+
+		Console.setCursorPosition(60, 8)
+		Console.write('East-West')
+
+		Console.setCursorPosition(60, 9)
+		print '[.scoreEastWest] ([.tricksEastWest])'
+
+
+	def initialiseScreen
+		Console.title = 'Euchre Game'
+		Console.cursorVisible = false
+
+		Console.clear
+		Console.setCursorPosition(8, 0)
+		Console.write('Euchre by Matthew Strawbridge v0.1')
+		.showScores
+
+
+	def getFirstPlayerWithOptionToOrderUp(dealer as EuchrePlayer) as EuchrePlayer
+		return .getPlayersStartingAt(dealer)[1]		
+
+	def turnOverTrumpCard
+		Console.setCursorPosition(20, 12)
+		Console.write('Turned card: ## ')
+
+	def getDealer as EuchrePlayer
+		ensure
+			result.isDealer
+		body
+			for player in _players
+				if player.isDealer, return player
+			assert false
+			return _players[0] # just to compile
+
+	def setMakerAndTrumps(dealer as EuchrePlayer, aMaker as out EuchrePlayer?, aTrumps as out Suit)
+		"""
+		Sets the values of the maker and trumps parameters.
+		"""
+		ensure
+			aMaker is not nil
+		body
+			maker as EuchrePlayer? is nil
+			while maker is nil
+				# empty the hands and clear the status text
+				for player in _players
+					player.hand.cards.clear
+					player.showStatus('')
+					player.clearSuit
+
+				# shuffle
+				_pack.shuffle
+				cards = _pack.getEnumerator
+				cards.reset
+				cards.moveNext # set current to first card
+
+				# Deal the cards
+				assert all for player in _players get player.hand.cards.count == 0
+				for round in 1 : 5+1 # 1..5
+					for player in _players
+						player.hand.deal(cards.current)
+						cards.moveNext
+
+				# Next card determines the suit
+				suitCard as Card = cards.current
+				cards.moveNext # not strictly necessary
+
+				Console.setCursorPosition(20, 12)
+				Console.write('Turned card: ')
+				suitCard.printInColor
+
+				# the trump suit will be the suit of the turned card unless it's the Benny
+				trumps as Suit = suitCard.suit
+				if suitCard.equals(EuchrePack.benny)
+					# dealer has to call a suit before looking at his cards
+					trumps = .getDealer.callSuitForBenny
+
+				for player in .players
+					player.drawText
+
+				firstPlayerWithOptionToOrderUp = .getFirstPlayerWithOptionToOrderUp(dealer)
+
+				for player in .getPlayersStartingAt(firstPlayerWithOptionToOrderUp)
+					player.think
+					if suitCard.equals(EuchrePack.benny)
+						result = player.wantsBenny(trumps)
+					else
+						result = player.wantsTrump(suitCard)
+					if result
+						maker = player
+						dealer.pickUpTurnedCard(suitCard)
+						.turnOverTrumpCard
+						break
+
+				if maker is nil
+					assert not suitCard.equals(EuchrePack.benny)
+					# Second time round
+					# Clear all statuses
+					for player in .getPlayersStartingAt(firstPlayerWithOptionToOrderUp)
+						player.showStatus('')
+
+					.turnOverTrumpCard
+					for player in .getPlayersStartingAt(firstPlayerWithOptionToOrderUp)
+						player.think
+						newSuit as Suit? = player.chooseOtherTrump(suitCard)
+						if newSuit
+							maker = player
+							trumps = newSuit
+							break
+				else
+					trumps = suitCard.suit
+
+			for player in _players
+				player.showStatus('')
+			aMaker, aTrumps = maker, trumps
+
+
+    def main
+		#
+		# Start the game
+		#
+		.initialiseScreen
+
+		_banner.scroll("Welcome to Euchre")
+
+		_pack.shuffle
+		cards as IEnumerator<of Card> = _pack.getEnumerator
+		cards.reset
+		cards.moveNext # set current to first card
+
+		# Pick a dealer at random
+		r = Random()
+		dealer as EuchrePlayer = .players[r.next(0, .players.count)]
+
+		while .scoreNorthSouth < 10 and .scoreEastWest < 10
+			# start of new round of four tricks
+			assert .tricksNorthSouth == 0 and .tricksEastWest == 0
+			for player in .players
+				player.clearPlayedCard
+				player.isGoingAlone = false
+				player.isDown = false
+
+			dealer.isDealer = true
+			.getPartner(dealer).isDealersPartner = true
+
+			maker as EuchrePlayer?
+			trumps as Suit = Suits.spades # have to initialise it to something
+			.setMakerAndTrumps(dealer, out maker, out trumps)
+			assert maker is not nil
+
+			if EuchreGameRules.canOrderUpPartner and .getPartner(maker to !) == dealer
+				maker.isGoingAlone = true
+
+			# tell players they're down
+			for player in .players
+				if player.isGoingAlone, .getPartner(player).isDown = true
+
+			firstPlayerToAct = .getFirstPlayerWithOptionToOrderUp(dealer)
+			while firstPlayerToAct.isDown
+				firstPlayerToAct = .getPlayersStartingAt(firstPlayerToAct)[1]
+
+			while .tricksNorthSouth + .tricksEastWest < 5
+				# start of new trick
+				for player in .players, player.clearPlayedCard
+
+				trick = List<of Card>()
+				for player in .getActivePlayersStartingAt(firstPlayerToAct)
+					trick.add(player.play(trick, trumps))
+				assert trick.count >= 2 and trick.count <= 4
+
+				demanded as Suit = trick[0].suit
+
+				bestCard = trick[0]
+				for card in trick[1:]
+					if EuchreGameRules.compareCards(bestCard, card, trumps, demanded) == CardGameRules.CardCompare.SECOND_CARD_IS_BETTER
+						bestCard = card
+				bestCardIndex = trick.indexOf(bestCard)
+
+				Console.setCursorPosition(1, 23)
+
+				# print 'The best card was [bestCard] played by [.getPlayersStartingAt(firstPlayerWithOptionToOrderUp)[bestCardIndex]]'
+				winner = .getActivePlayersStartingAt(firstPlayerToAct)[bestCardIndex]
+
+				if winner in [_north, _south]
+					.tricksNorthSouth += 1
+				else
+					assert winner in [_east, _west]
+					.tricksEastWest += 1
+
+				.showScores
+
+				_pack.shuffle
+				cards = _pack.getEnumerator
+				cards.reset
+				cards.moveNext
+
+				firstPlayerToAct = winner
+
+				#end of trick
+			# next trick
+
+			# end of round
+			# tidy up
+			dealer.isDealer = false
+			.getPartner(dealer).isDealersPartner = false
+			dealer = .getPlayersStartingAt(dealer)[1] # next
+			assert all for player in .players get not player.isDealer
+			assert all for player in .players get not player.isDealersPartner
+			dealer.isDealer = true
+			.getPartner(dealer).isDealersPartner = true
+
+			# sort out the scores
+
+			assert maker is not nil
+			assert .tricksNorthSouth + .tricksEastWest == 5
+			# TODO: can replace this with a single function called twice
+			if maker in [_north, _south]
+				if .tricksNorthSouth == 5
+					if maker.isGoingAlone
+						.scoreNorthSouth += 4
+						_banner.scroll("Four points")
+					else
+						.scoreNorthSouth += 2
+						_banner.scroll("All five tricks")
+				else if .tricksNorthSouth >= 3
+					.scoreNorthSouth += 1
+					_banner.scroll("Point made")
+				else
+					if _east.isGoingAlone or _west.isGoingAlone
+						.scoreEastWest += 4
+						_banner.scroll("Lone euchre")
+					else
+						.scoreEastWest += 2
+						_banner.scroll("Euchre")
+			else
+				assert maker in [_east, _west]
+				if .tricksEastWest == 5
+					if maker.isGoingAlone
+						.scoreEastWest += 4
+						_banner.scroll("Four points")
+					else
+						.scoreEastWest += 2
+						_banner.scroll("All five tricks")
+				else if .tricksEastWest >= 3
+					.scoreEastWest += 1
+					_banner.scroll("Point made")
+				else
+					if _north.isGoingAlone or _south.isGoingAlone
+						.scoreNorthSouth += 4
+						_banner.scroll("Lone euchre")
+					else
+						.scoreNorthSouth += 2
+						_banner.scroll("Euchre")
+
+			.tricksNorthSouth = 0
+			.tricksEastWest = 0
+
+			.showScores
+			# next round
+
+		# end of the program
+		Console.setCursorPosition(0, 23)
+		if .scoreNorthSouth >= 10
+			_banner.scroll('[_north.name] and [_south.name] won')
+		else
+			assert .scoreEastWest >= 10
+			_banner.scroll('[_east.name] and [_west.name] won')
